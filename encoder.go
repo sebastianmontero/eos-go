@@ -70,6 +70,7 @@ func (e *Encoder) Encode(v interface{}) (err error) {
 	case Name:
 		return e.writeName(cv)
 	case AccountName:
+		// fmt.Println("Encoding account name: ", cv)
 		name := Name(cv)
 		return e.writeName(name)
 	case PermissionName:

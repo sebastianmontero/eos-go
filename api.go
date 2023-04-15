@@ -249,9 +249,12 @@ func (api *API) GetABI(ctx context.Context, account AccountName) (out *GetABIRes
 }
 
 func (api *API) ABIJSONToBin(ctx context.Context, code AccountName, action Name, payload M) (out HexBytes, err error) {
+	fmt.Println("Before call")
 	resp := ABIJSONToBinResp{}
+
 	err = api.call(ctx, "chain", "abi_json_to_bin", M{"code": code, "action": action, "args": payload}, &resp)
 	if err != nil {
+		fmt.Printf("call error: %v\n", err)
 		return
 	}
 
@@ -662,6 +665,7 @@ func (api *API) call(ctx context.Context, baseAPI string, endpoint string, body 
 	}
 
 	targetURL := fmt.Sprintf("%s/v1/%s/%s", api.BaseURL, baseAPI, endpoint)
+	// fmt.Printf("targetUrl: %v\n", targetURL)
 	req, err := http.NewRequest("POST", targetURL, jsonBody)
 	if err != nil {
 		return fmt.Errorf("NewRequest: %w", err)

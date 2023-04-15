@@ -325,6 +325,20 @@ func MustStringToSymbol(str string) Symbol {
 	return symbol
 }
 
+func (m *Symbol) UnmarshalJSON(b []byte) error {
+	ts, err := StringToSymbol(strings.Trim(string(b), "\""))
+	if err != nil {
+
+		return fmt.Errorf("failed unmarshalling symbol: %v, error: %v", string(b), err)
+	}
+	*m = ts
+	return nil
+}
+
+func (s Symbol) Equal(o Symbol) bool {
+	return (s.String() == o.String())
+}
+
 func (s Symbol) SymbolCode() (SymbolCode, error) {
 	if s.symbolCode != 0 {
 		return SymbolCode(s.symbolCode), nil
@@ -578,7 +592,10 @@ func (a *Asset) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-
+	if strings.Trim(s, " ") == "0" {
+		*a = Asset{Amount: 0}
+		return nil
+	}
 	asset, err := NewAsset(s)
 	if err != nil {
 		return err
@@ -902,6 +919,10 @@ func (f *TimePoint) UnmarshalJSON(data []byte) error {
 
 	*f = TimePoint(out.UnixNano() / 1000)
 	return nil
+}
+
+func (f TimePoint) Time() time.Time {
+	return time.UnixMicro(int64(f))
 }
 
 // TimePointSec represents the number of seconds since EPOCH (Jan 1st 1970)
@@ -1499,8 +1520,9 @@ func (t fcVariantType) String() string {
 }
 
 // FIXME: Ideally, we would re-use `BaseVariant` but that requires some
-//        re-thinking of the decoder to make it efficient to read FCVariant types. For now,
-//        let's re-code it a bit to make it as efficient as possible.
+//
+//	re-thinking of the decoder to make it efficient to read FCVariant types. For now,
+//	let's re-code it a bit to make it as efficient as possible.
 type fcVariant struct {
 	TypeID fcVariantType
 	Impl   interface{}
@@ -1514,7 +1536,8 @@ func (a fcVariant) IsNil() bool {
 // and object, turning everything along the way in Go primitives types.
 //
 // **Note** For `Int64` and `Uint64`, we return `eos.Int64` and `eos.Uint64` types
-//          so that JSON marshalling is done correctly for large numbers
+//
+//	so that JSON marshalling is done correctly for large numbers
 func (a fcVariant) ToNative() interface{} {
 	if a.TypeID == fcVariantNullType ||
 		a.TypeID == fcVariantDoubleType ||

@@ -278,11 +278,12 @@ func (s *SignedTransaction) SignedByKeys(chainID Checksum256) (out []ecc.PublicK
 }
 
 func (s *SignedTransaction) PackedTransactionAndCFD() ([]byte, []byte, error) {
+	// fmt.Println("In packedTransaction: ", s.Transaction.Actions[0].ActionData)
 	rawtrx, err := MarshalBinary(s.Transaction)
 	if err != nil {
 		return nil, nil, err
 	}
-
+	// fmt.Println("After packedTransaction: ", s.Transaction)
 	rawcfd := []byte{}
 	if len(s.ContextFreeData) > 0 {
 		rawcfd, err = MarshalBinary(s.ContextFreeData)

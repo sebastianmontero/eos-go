@@ -79,8 +79,8 @@ func (a *ActionData) SetToServer(toServer bool) {
 	a.toServer = toServer
 }
 
-//  jsonActionToServer represents what /v1/chain/push_transaction
-//  expects, which isn't allllways the same everywhere.
+// jsonActionToServer represents what /v1/chain/push_transaction
+// expects, which isn't allllways the same everywhere.
 type jsonActionToServer struct {
 	Account       AccountName       `json:"account"`
 	Name          ActionName        `json:"name"`
@@ -131,7 +131,7 @@ func (data *ActionData) EncodeActionData() ([]byte, error) {
 
 	buf := new(bytes.Buffer)
 	encoder := NewEncoder(buf)
-
+	// fmt.Println("Encoding action data: ", data.Data)
 	if err := encoder.Encode(data.Data); err != nil {
 		return nil, err
 	}
