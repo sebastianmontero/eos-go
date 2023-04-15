@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/eoscanada/eos-go/ecc"
+	"github.com/sebastianmontero/eos-go/ecc"
 	"go.uber.org/zap"
 )
 

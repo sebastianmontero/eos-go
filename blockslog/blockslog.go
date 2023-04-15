@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/eoscanada/eos-go"
+	"github.com/sebastianmontero/eos-go"
 )
 
 func Process(filename string) error {
@@ -65,7 +65,7 @@ func Process(filename string) error {
 		fmt.Println("Totem", totem)
 	}
 
-	for i := 0 ; i < 5; i++{
+	for i := 0; i < 5; i++ {
 		cnt := make([]byte, 1000000)
 
 		prevPos, err := fl.Seek(0, os.SEEK_CUR)

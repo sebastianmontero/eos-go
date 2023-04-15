@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/eoscanada/eos-go/p2p"
+	"github.com/sebastianmontero/eos-go/p2p"
 	"github.com/streamingfast/logging"
 )
 
@@ -16,7 +16,7 @@ func main() {
 	flag.Parse()
 
 	if *showLog {
-		logging.Set(logging.MustCreateLogger(), "github.com/eoscanada/eos-go/p2p")
+		logging.Set(logging.MustCreateLogger(), "github.com/sebastianmontero/eos-go/p2p")
 	}
 	defer p2p.SyncLogger()
 

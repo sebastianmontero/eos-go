@@ -2,7 +2,7 @@
 
 [点击查看中文版](./README-cn.md)
 
-[![GoDoc](https://godoc.org/github.com/eoscanada/eos-go?status.svg)](https://godoc.org/github.com/eoscanada/eos-go)
+[![GoDoc](https://godoc.org/github.com/sebastianmontero/eos-go?status.svg)](https://godoc.org/github.com/sebastianmontero/eos-go)
 
 This library provides simple access to data structures (binary packing
 and JSON interface) and API calls to an EOS.IO RPC server, running
@@ -28,7 +28,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	eos "github.com/eoscanada/eos-go"
+	eos "github.com/sebastianmontero/eos-go"
 	cli "github.com/streamingfast/cli"
 )
 

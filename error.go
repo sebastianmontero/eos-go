@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eoscanada/eos-go/eoserr"
+	"github.com/sebastianmontero/eos-go/eoserr"
 )
 
 // APIError represents the errors as reported by the server
@@ -63,23 +63,25 @@ func (e APIError) Error() string {
 // the form:
 //
 // ```
-//  {
-//  	"code": 500,
-//  	"message": "Internal Service Error",
-//  	"error": {
-//  		"code": 0,
-//  		"name": "exception",
-//  		"what": "unspecified",
-//  		"details": [
-//		 		{
-//		 			"message": "unknown key (<... redacted ...>): (0 eos.rex)",
-//		 			"file": "http_plugin.cpp",
-//		 			"line_number": 589,
-//		 			"method": "handle_exception"
-//		 		}
-//  		]
-//  	}
-//  }
+//
+//	 {
+//	 	"code": 500,
+//	 	"message": "Internal Service Error",
+//	 	"error": {
+//	 		"code": 0,
+//	 		"name": "exception",
+//	 		"what": "unspecified",
+//	 		"details": [
+//			 		{
+//			 			"message": "unknown key (<... redacted ...>): (0 eos.rex)",
+//			 			"file": "http_plugin.cpp",
+//			 			"line_number": 589,
+//			 			"method": "handle_exception"
+//			 		}
+//	 		]
+//	 	}
+//	 }
+//
 // ```
 //
 // This will check if root code is a 500, that inner error code is 0 and there is

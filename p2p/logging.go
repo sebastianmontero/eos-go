@@ -10,7 +10,7 @@ import (
 var zlog = zap.NewNop()
 
 func init() {
-	logging.Register("github.com/eoscanada/eos-go/p2p", &zlog)
+	logging.Register("github.com/sebastianmontero/eos-go/p2p", &zlog)
 }
 
 // SyncLogger sync logger, should `defer SyncLogger()` when use p2p package

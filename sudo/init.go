@@ -1,6 +1,6 @@
 package sudo
 
-import eos "github.com/eoscanada/eos-go"
+import eos "github.com/sebastianmontero/eos-go"
 
 func init() {
 	eos.RegisterAction(AN("eosio.wrap"), ActN("exec"), Exec{})

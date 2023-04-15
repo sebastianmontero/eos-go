@@ -1,6 +1,6 @@
 package system
 
-import "github.com/eoscanada/eos-go"
+import "github.com/sebastianmontero/eos-go"
 
 // NewLinkAuth creates an action from the `eosio.system` contract
 // called `linkauth`.

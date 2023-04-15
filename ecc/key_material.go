@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/eoscanada/eos-go/btcsuite/btcutil/base58"
+	"github.com/sebastianmontero/eos-go/btcsuite/btcutil/base58"
 )
 
 type keyMaterialDecoder func(input string) []byte

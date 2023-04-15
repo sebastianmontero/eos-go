@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eoscanada/eos-go/btcsuite/btcd/btcec"
-	"github.com/eoscanada/eos-go/btcsuite/btcutil/base58"
+	"github.com/sebastianmontero/eos-go/btcsuite/btcd/btcec"
+	"github.com/sebastianmontero/eos-go/btcsuite/btcutil/base58"
 )
 
 var PublicKeyPrefix = "PUB_"

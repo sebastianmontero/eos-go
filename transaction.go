@@ -17,7 +17,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/eoscanada/eos-go/ecc"
+	"github.com/sebastianmontero/eos-go/ecc"
 )
 
 type TransactionHeader struct {

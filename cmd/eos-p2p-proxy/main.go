@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/eoscanada/eos-go/p2p"
+	"github.com/sebastianmontero/eos-go/p2p"
 	"github.com/streamingfast/logging"
 )
 
@@ -21,7 +21,7 @@ func main() {
 	fmt.Println("P2P Proxy")
 
 	if *showLog {
-		logging.Set(logging.MustCreateLogger(), "github.com/eoscanada/eos-go/p2p")
+		logging.Set(logging.MustCreateLogger(), "github.com/sebastianmontero/eos-go/p2p")
 	}
 	defer p2p.SyncLogger()
 
