@@ -36,6 +36,8 @@ type API struct {
 
 	customGetRequiredKeys     func(ctx context.Context, tx *Transaction) ([]ecc.PublicKey, error)
 	enablePartialRequiredKeys bool
+	ForceUniqueTransactions   bool
+	nonce                     uint64
 }
 
 func New(baseURL string) *API {
@@ -395,6 +397,18 @@ func (api *API) SignPushActionsWithOpts(ctx context.Context, actions []*Action, 
 	}
 
 	tx := NewTransaction(actions, opts)
+
+	if api.ForceUniqueTransactions {
+		// fmt.Printf("Nonce: %d\n", api.nonce)
+		tx.ContextFreeActions = append(tx.ContextFreeActions, &Action{
+			Account: AN("eosio.null"),
+			Name:    ActionName("nonce"),
+			ActionData: ActionData{
+				HexData: []byte(fmt.Sprintf(`%d`, api.nonce)),
+			},
+		})
+		api.nonce++
+	}
 
 	return api.SignPushTransaction(ctx, tx, opts.ChainID, opts.Compress)
 }
