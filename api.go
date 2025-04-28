@@ -21,7 +21,7 @@ import (
 
 type API struct {
 	HttpClient *http.Client
-	BaseURL    string
+	BaseURLs   []string // for multi-endpoint support
 	Signer     Signer
 	Debug      bool
 	Compress   CompressionType
@@ -41,6 +41,15 @@ type API struct {
 }
 
 func New(baseURL string) *API {
+	return NewFromUrls([]string{baseURL})
+}
+
+// NewFromUrls creates an API instance with multiple endpoints
+func NewFromUrls(baseURLs []string) *API {
+	trimmed := make([]string, len(baseURLs))
+	for i, u := range baseURLs {
+		trimmed[i] = strings.TrimRight(u, "/")
+	}
 	api := &API{
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -57,11 +66,10 @@ func New(baseURL string) *API {
 				DisableKeepAlives:     true, // default behavior, because of `nodeos`'s lack of support for Keep alives.
 			},
 		},
-		BaseURL:  strings.TrimRight(baseURL, "/"),
+		BaseURLs: trimmed,
 		Compress: CompressionZlib,
 		Header:   make(http.Header),
 	}
-
 	return api
 }
 
@@ -158,13 +166,13 @@ func (api *API) SetSigner(s Signer) {
 // ProducerPause will pause block production on a nodeos with
 // `producer_api` plugin loaded.
 func (api *API) ProducerPause(ctx context.Context) error {
-	return api.call(ctx, "producer", "pause", nil, nil)
+	return api.Call(ctx, "producer", "pause", nil, nil)
 }
 
 // CreateSnapshot will write a snapshot file on a nodeos with
 // `producer_api` plugin loaded.
 func (api *API) CreateSnapshot(ctx context.Context) (out *CreateSnapshotResp, err error) {
-	err = api.call(ctx, "producer", "create_snapshot", nil, &out)
+	err = api.Call(ctx, "producer", "create_snapshot", nil, &out)
 	return
 }
 
@@ -172,7 +180,7 @@ func (api *API) CreateSnapshot(ctx context.Context) (out *CreateSnapshotResp, er
 // state. Requires `producer_api` and useful when loading
 // from a snapshot
 func (api *API) GetIntegrityHash(ctx context.Context) (out *GetIntegrityHashResp, err error) {
-	err = api.call(ctx, "producer", "get_integrity_hash", nil, &out)
+	err = api.Call(ctx, "producer", "get_integrity_hash", nil, &out)
 	return
 }
 
@@ -180,23 +188,23 @@ func (api *API) GetIntegrityHash(ctx context.Context) (out *GetIntegrityHashResp
 // `producer_api` plugin loaded. Obviously, this needs to be a
 // producing node on the producers schedule for it to do anything.
 func (api *API) ProducerResume(ctx context.Context) error {
-	return api.call(ctx, "producer", "resume", nil, nil)
+	return api.Call(ctx, "producer", "resume", nil, nil)
 }
 
 // IsProducerPaused queries the blockchain for the pause statement of
 // block production.
 func (api *API) IsProducerPaused(ctx context.Context) (out bool, err error) {
-	err = api.call(ctx, "producer", "paused", nil, &out)
+	err = api.Call(ctx, "producer", "paused", nil, &out)
 	return
 }
 
 func (api *API) GetProducerProtocolFeatures(ctx context.Context) (out []ProtocolFeature, err error) {
-	err = api.call(ctx, "producer", "get_supported_protocol_features", nil, &out)
+	err = api.Call(ctx, "producer", "get_supported_protocol_features", nil, &out)
 	return
 }
 
 func (api *API) ScheduleProducerProtocolFeatureActivations(ctx context.Context, protocolFeaturesToActivate []Checksum256) error {
-	return api.call(ctx, "producer", "schedule_protocol_feature_activations", M{"protocol_features_to_activate": protocolFeaturesToActivate}, nil)
+	return api.Call(ctx, "producer", "schedule_protocol_feature_activations", M{"protocol_features_to_activate": protocolFeaturesToActivate}, nil)
 }
 
 type GetAccountOption interface {
@@ -221,23 +229,23 @@ func (api *API) GetAccount(ctx context.Context, name AccountName, opts ...GetAcc
 		opt.apply(body)
 	}
 
-	err = api.call(ctx, "chain", "get_account", body, &out)
+	err = api.Call(ctx, "chain", "get_account", body, &out)
 	return
 }
 
 func (api *API) GetRawCodeAndABI(ctx context.Context, account AccountName) (out *GetRawCodeAndABIResp, err error) {
-	err = api.call(ctx, "chain", "get_raw_code_and_abi", M{"account_name": account}, &out)
+	err = api.Call(ctx, "chain", "get_raw_code_and_abi", M{"account_name": account}, &out)
 	return
 }
 
 func (api *API) GetCode(ctx context.Context, account AccountName) (out *GetCodeResp, err error) {
-	err = api.call(ctx, "chain", "get_code", M{"account_name": account, "code_as_wasm": true}, &out)
+	err = api.Call(ctx, "chain", "get_code", M{"account_name": account, "code_as_wasm": true}, &out)
 	return
 }
 
 func (api *API) GetCodeHash(ctx context.Context, account AccountName) (out Checksum256, err error) {
 	resp := GetCodeHashResp{}
-	if err = api.call(ctx, "chain", "get_code_hash", M{"account_name": account}, &resp); err != nil {
+	if err = api.Call(ctx, "chain", "get_code_hash", M{"account_name": account}, &resp); err != nil {
 		return
 	}
 
@@ -246,7 +254,7 @@ func (api *API) GetCodeHash(ctx context.Context, account AccountName) (out Check
 }
 
 func (api *API) GetABI(ctx context.Context, account AccountName) (out *GetABIResp, err error) {
-	err = api.call(ctx, "chain", "get_abi", M{"account_name": account}, &out)
+	err = api.Call(ctx, "chain", "get_abi", M{"account_name": account}, &out)
 	return
 }
 
@@ -254,7 +262,7 @@ func (api *API) ABIJSONToBin(ctx context.Context, code AccountName, action Name,
 	fmt.Println("Before call")
 	resp := ABIJSONToBinResp{}
 
-	err = api.call(ctx, "chain", "abi_json_to_bin", M{"code": code, "action": action, "args": payload}, &resp)
+	err = api.Call(ctx, "chain", "abi_json_to_bin", M{"code": code, "action": action, "args": payload}, &resp)
 	if err != nil {
 		fmt.Printf("call error: %v\n", err)
 		return
@@ -266,7 +274,7 @@ func (api *API) ABIJSONToBin(ctx context.Context, code AccountName, action Name,
 
 func (api *API) ABIBinToJSON(ctx context.Context, code AccountName, action Name, payload HexBytes) (out M, err error) {
 	resp := ABIBinToJSONResp{}
-	err = api.call(ctx, "chain", "abi_bin_to_json", M{"code": code, "action": action, "binargs": payload}, &resp)
+	err = api.Call(ctx, "chain", "abi_bin_to_json", M{"code": code, "action": action, "binargs": payload}, &resp)
 	if err != nil {
 		return
 	}
@@ -275,33 +283,33 @@ func (api *API) ABIBinToJSON(ctx context.Context, code AccountName, action Name,
 }
 
 func (api *API) WalletCreate(ctx context.Context, walletName string) (err error) {
-	return api.call(ctx, "wallet", "create", walletName, nil)
+	return api.Call(ctx, "wallet", "create", walletName, nil)
 }
 
 func (api *API) WalletOpen(ctx context.Context, walletName string) (err error) {
-	return api.call(ctx, "wallet", "open", walletName, nil)
+	return api.Call(ctx, "wallet", "open", walletName, nil)
 }
 
 func (api *API) WalletLock(ctx context.Context, walletName string) (err error) {
-	return api.call(ctx, "wallet", "lock", walletName, nil)
+	return api.Call(ctx, "wallet", "lock", walletName, nil)
 }
 
 func (api *API) WalletLockAll(ctx context.Context) (err error) {
-	return api.call(ctx, "wallet", "lock_all", nil, nil)
+	return api.Call(ctx, "wallet", "lock_all", nil, nil)
 }
 
 func (api *API) WalletUnlock(ctx context.Context, walletName, password string) (err error) {
-	return api.call(ctx, "wallet", "unlock", []string{walletName, password}, nil)
+	return api.Call(ctx, "wallet", "unlock", []string{walletName, password}, nil)
 }
 
 // WalletImportKey loads a new WIF-encoded key into the wallet.
 func (api *API) WalletImportKey(ctx context.Context, walletName, wifPrivKey string) (err error) {
-	return api.call(ctx, "wallet", "import_key", []string{walletName, wifPrivKey}, nil)
+	return api.Call(ctx, "wallet", "import_key", []string{walletName, wifPrivKey}, nil)
 }
 
 func (api *API) WalletPublicKeys(ctx context.Context) (out []ecc.PublicKey, err error) {
 	var textKeys []string
-	err = api.call(ctx, "wallet", "get_public_keys", nil, &textKeys)
+	err = api.Call(ctx, "wallet", "get_public_keys", nil, &textKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +326,7 @@ func (api *API) WalletPublicKeys(ctx context.Context) (out []ecc.PublicKey, err 
 }
 
 func (api *API) ListWallets(ctx context.Context, walletName ...string) (out []string, err error) {
-	err = api.call(ctx, "wallet", "list_wallets", walletName, &out)
+	err = api.Call(ctx, "wallet", "list_wallets", walletName, &out)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +336,7 @@ func (api *API) ListWallets(ctx context.Context, walletName ...string) (out []st
 
 func (api *API) ListKeys(ctx context.Context, walletNames ...string) (out []*ecc.PrivateKey, err error) {
 	var textKeys []string
-	err = api.call(ctx, "wallet", "list_keys", walletNames, &textKeys)
+	err = api.Call(ctx, "wallet", "list_keys", walletNames, &textKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +354,7 @@ func (api *API) ListKeys(ctx context.Context, walletNames ...string) (out []*ecc
 
 func (api *API) GetPublicKeys(ctx context.Context) (out []*ecc.PublicKey, err error) {
 	var textKeys []string
-	err = api.call(ctx, "wallet", "get_public_keys", nil, &textKeys)
+	err = api.Call(ctx, "wallet", "get_public_keys", nil, &textKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +371,7 @@ func (api *API) GetPublicKeys(ctx context.Context) (out []*ecc.PublicKey, err er
 }
 
 func (api *API) WalletSetTimeout(ctx context.Context, timeout int32) (err error) {
-	return api.call(ctx, "wallet", "set_timeout", timeout, nil)
+	return api.Call(ctx, "wallet", "set_timeout", timeout, nil)
 }
 
 func (api *API) WalletSignTransaction(ctx context.Context, tx *SignedTransaction, chainID []byte, pubKeys ...ecc.PublicKey) (out *WalletSignTransactionResp, err error) {
@@ -372,7 +380,7 @@ func (api *API) WalletSignTransaction(ctx context.Context, tx *SignedTransaction
 		textKeys = append(textKeys, key.String())
 	}
 
-	err = api.call(ctx, "wallet", "sign_transaction", []interface{}{
+	err = api.Call(ctx, "wallet", "sign_transaction", []interface{}{
 		tx,
 		textKeys,
 		hex.EncodeToString(chainID),
@@ -479,26 +487,26 @@ func (api *API) SignTransaction(ctx context.Context, tx *Transaction, chainID Ch
 // PushTransaction submits a properly filled (tapos), packed and
 // signed transaction to the blockchain.
 func (api *API) PushTransaction(ctx context.Context, tx *PackedTransaction) (out *PushTransactionFullResp, err error) {
-	err = api.call(ctx, "chain", "push_transaction", tx, &out)
+	err = api.Call(ctx, "chain", "push_transaction", tx, &out)
 	return
 }
 
 func (api *API) SendTransaction(ctx context.Context, tx *PackedTransaction) (out *PushTransactionFullResp, err error) {
-	err = api.call(ctx, "chain", "send_transaction", tx, &out)
+	err = api.Call(ctx, "chain", "send_transaction", tx, &out)
 	return
 }
 
 func (api *API) PushTransactionRaw(ctx context.Context, tx *PackedTransaction) (out json.RawMessage, err error) {
-	err = api.call(ctx, "chain", "push_transaction", tx, &out)
+	err = api.Call(ctx, "chain", "push_transaction", tx, &out)
 	return
 }
 func (api *API) SendTransactionRaw(ctx context.Context, tx *PackedTransaction) (out json.RawMessage, err error) {
-	err = api.call(ctx, "chain", "send_transaction", tx, &out)
+	err = api.Call(ctx, "chain", "send_transaction", tx, &out)
 	return
 }
 
 func (api *API) GetInfo(ctx context.Context) (out *InfoResp, err error) {
-	err = api.call(ctx, "chain", "get_info", nil, &out)
+	err = api.Call(ctx, "chain", "get_info", nil, &out)
 	return
 }
 
@@ -527,33 +535,33 @@ func (api *API) cachedGetInfo(ctx context.Context) (*InfoResp, error) {
 }
 
 func (api *API) GetNetConnections(ctx context.Context) (out []*NetConnectionsResp, err error) {
-	err = api.call(ctx, "net", "connections", nil, &out)
+	err = api.Call(ctx, "net", "connections", nil, &out)
 	return
 }
 
 func (api *API) NetConnect(ctx context.Context, host string) (out NetConnectResp, err error) {
-	err = api.call(ctx, "net", "connect", host, &out)
+	err = api.Call(ctx, "net", "connect", host, &out)
 	return
 }
 
 func (api *API) NetDisconnect(ctx context.Context, host string) (out NetDisconnectResp, err error) {
-	err = api.call(ctx, "net", "disconnect", host, &out)
+	err = api.Call(ctx, "net", "disconnect", host, &out)
 	return
 }
 
 func (api *API) GetNetStatus(ctx context.Context, host string) (out *NetStatusResp, err error) {
-	err = api.call(ctx, "net", "status", M{"host": host}, &out)
+	err = api.Call(ctx, "net", "status", M{"host": host}, &out)
 	return
 }
 
 func (api *API) GetBlockByID(ctx context.Context, id string) (out *BlockResp, err error) {
-	err = api.call(ctx, "chain", "get_block", M{"block_num_or_id": id}, &out)
+	err = api.Call(ctx, "chain", "get_block", M{"block_num_or_id": id}, &out)
 	return
 }
 
 // GetScheduledTransactionsWithBounds returns scheduled transactions within specified bounds
 func (api *API) GetScheduledTransactionsWithBounds(ctx context.Context, lower_bound string, limit uint32) (out *ScheduledTransactionsResp, err error) {
-	err = api.call(ctx, "chain", "get_scheduled_transactions", M{"json": true, "lower_bound": lower_bound, "limit": limit}, &out)
+	err = api.Call(ctx, "chain", "get_scheduled_transactions", M{"json": true, "lower_bound": lower_bound, "limit": limit}, &out)
 	return
 }
 
@@ -566,73 +574,73 @@ func (api *API) GetProducers(ctx context.Context) (out *ProducersResp, err error
 	/*
 		+FC_REFLECT( eosio::chain_apis::read_only::get_producers_params, (json)(lower_bound)(limit) )
 		+FC_REFLECT( eosio::chain_apis::read_only::get_producers_result, (rows)(total_producer_vote_weight)(more) ); */
-	err = api.call(ctx, "chain", "get_producers", M{"json": true}, &out)
+	err = api.Call(ctx, "chain", "get_producers", M{"json": true}, &out)
 	return
 }
 
 func (api *API) GetBlockByNum(ctx context.Context, num uint32) (out *BlockResp, err error) {
-	err = api.call(ctx, "chain", "get_block", M{"block_num_or_id": fmt.Sprintf("%d", num)}, &out)
-	//err = api.call("chain", "get_block", M{"block_num_or_id": num}, &out)
+	err = api.Call(ctx, "chain", "get_block", M{"block_num_or_id": fmt.Sprintf("%d", num)}, &out)
+	//err = api.Call("chain", "get_block", M{"block_num_or_id": num}, &out)
 	return
 }
 
 func (api *API) GetBlockByNumOrID(ctx context.Context, query string) (out *SignedBlock, err error) {
-	err = api.call(ctx, "chain", "get_block", M{"block_num_or_id": query}, &out)
+	err = api.Call(ctx, "chain", "get_block", M{"block_num_or_id": query}, &out)
 	return
 }
 
 func (api *API) GetBlockByNumOrIDRaw(ctx context.Context, query string) (out interface{}, err error) {
-	err = api.call(ctx, "chain", "get_block", M{"block_num_or_id": query}, &out)
+	err = api.Call(ctx, "chain", "get_block", M{"block_num_or_id": query}, &out)
 	return
 }
 
 func (api *API) GetDBSize(ctx context.Context) (out *DBSizeResp, err error) {
-	err = api.call(ctx, "db_size", "get", nil, &out)
+	err = api.Call(ctx, "db_size", "get", nil, &out)
 	return
 }
 
 func (api *API) GetTransaction(ctx context.Context, id string) (out *TransactionResp, err error) {
-	err = api.call(ctx, "history", "get_transaction", M{"id": id}, &out)
+	err = api.Call(ctx, "history", "get_transaction", M{"id": id}, &out)
 	return
 }
 
 func (api *API) GetTransactionRaw(ctx context.Context, id string) (out json.RawMessage, err error) {
-	err = api.call(ctx, "history", "get_transaction", M{"id": id}, &out)
+	err = api.Call(ctx, "history", "get_transaction", M{"id": id}, &out)
 	return
 }
 
 func (api *API) GetActions(ctx context.Context, params GetActionsRequest) (out *ActionsResp, err error) {
-	err = api.call(ctx, "history", "get_actions", params, &out)
+	err = api.Call(ctx, "history", "get_actions", params, &out)
 	return
 }
 
 func (api *API) GetKeyAccounts(ctx context.Context, publicKey string) (out *KeyAccountsResp, err error) {
-	err = api.call(ctx, "history", "get_key_accounts", M{"public_key": publicKey}, &out)
+	err = api.Call(ctx, "history", "get_key_accounts", M{"public_key": publicKey}, &out)
 	return
 }
 
 func (api *API) GetControlledAccounts(ctx context.Context, controllingAccount string) (out *ControlledAccountsResp, err error) {
-	err = api.call(ctx, "history", "get_controlled_accounts", M{"controlling_account": controllingAccount}, &out)
+	err = api.Call(ctx, "history", "get_controlled_accounts", M{"controlling_account": controllingAccount}, &out)
 	return
 }
 
 func (api *API) GetTransactions(ctx context.Context, name AccountName) (out *TransactionsResp, err error) {
-	err = api.call(ctx, "account_history", "get_transactions", M{"account_name": name}, &out)
+	err = api.Call(ctx, "account_history", "get_transactions", M{"account_name": name}, &out)
 	return
 }
 
 func (api *API) GetTableByScope(ctx context.Context, params GetTableByScopeRequest) (out *GetTableByScopeResp, err error) {
-	err = api.call(ctx, "chain", "get_table_by_scope", params, &out)
+	err = api.Call(ctx, "chain", "get_table_by_scope", params, &out)
 	return
 }
 
 func (api *API) GetTableRows(ctx context.Context, params GetTableRowsRequest) (out *GetTableRowsResp, err error) {
-	err = api.call(ctx, "chain", "get_table_rows", params, &out)
+	err = api.Call(ctx, "chain", "get_table_rows", params, &out)
 	return
 }
 
 func (api *API) GetRawABI(ctx context.Context, params GetRawABIRequest) (out *GetRawABIResp, err error) {
-	err = api.call(ctx, "chain", "get_raw_abi", params, &out)
+	err = api.Call(ctx, "chain", "get_raw_abi", params, &out)
 	return
 }
 
@@ -642,12 +650,12 @@ func (api *API) GetRequiredKeys(ctx context.Context, tx *Transaction) (out *GetR
 		return nil, err
 	}
 
-	err = api.call(ctx, "chain", "get_required_keys", M{"transaction": tx, "available_keys": keys}, &out)
+	err = api.Call(ctx, "chain", "get_required_keys", M{"transaction": tx, "available_keys": keys}, &out)
 	return
 }
 
 func (api *API) GetAccountsByAuthorizers(ctx context.Context, authorizations []PermissionLevel, keys []ecc.PublicKey) (out *GetAccountsByAuthorizersResp, err error) {
-	err = api.call(ctx, "chain", "get_accounts_by_authorizers", M{"accounts": authorizations, "keys": keys}, &out)
+	err = api.Call(ctx, "chain", "get_accounts_by_authorizers", M{"accounts": authorizations, "keys": keys}, &out)
 	return
 }
 
@@ -656,7 +664,7 @@ func (api *API) GetCurrencyBalance(ctx context.Context, account AccountName, sym
 	if symbol != "" {
 		params["symbol"] = symbol
 	}
-	err = api.call(ctx, "chain", "get_currency_balance", params, &out)
+	err = api.Call(ctx, "chain", "get_currency_balance", params, &out)
 	return
 }
 
@@ -664,7 +672,7 @@ func (api *API) GetCurrencyStats(ctx context.Context, code AccountName, symbol s
 	params := M{"code": code, "symbol": symbol}
 
 	outWrapper := make(map[string]*GetCurrencyStatsResp)
-	err = api.call(ctx, "chain", "get_currency_stats", params, &outWrapper)
+	err = api.Call(ctx, "chain", "get_currency_stats", params, &outWrapper)
 	out = outWrapper[symbol]
 
 	return
@@ -672,90 +680,137 @@ func (api *API) GetCurrencyStats(ctx context.Context, code AccountName, symbol s
 
 // See more here: libraries/chain/contracts/abi_serializer.cpp:58...
 
-func (api *API) call(ctx context.Context, baseAPI string, endpoint string, body interface{}, out interface{}) error {
-	jsonBody, err := enc(body)
-	if err != nil {
-		return err
+func (api *API) Call(ctx context.Context, baseAPI string, endpoint string, body interface{}, out interface{}) error {
+	// fmt.Println("In call")
+	endpoints := api.BaseURLs
+	if len(endpoints) == 0 {
+		return errors.New("no API endpoints configured")
 	}
 
-	targetURL := fmt.Sprintf("%s/v1/%s/%s", api.BaseURL, baseAPI, endpoint)
-	// fmt.Printf("targetUrl: %v\n", targetURL)
-	req, err := http.NewRequest("POST", targetURL, jsonBody)
-	if err != nil {
-		return fmt.Errorf("NewRequest: %w", err)
+	n := len(endpoints)
+	startIdx := 0
+	if n > 1 {
+		startIdx = int(time.Now().UnixNano() % int64(n))
 	}
 
-	for k, v := range api.Header {
-		if req.Header == nil {
-			req.Header = http.Header{}
-		}
-		req.Header[k] = append(req.Header[k], v...)
-	}
-
-	if api.Debug {
-		// Useful when debugging API calls
-		requestDump, err := httputil.DumpRequest(req, true)
+	var lastErr error
+	for i := 0; i < n; i++ {
+		idx := (startIdx + i) % n
+		targetURL := fmt.Sprintf("%s/v1/%s/%s", endpoints[idx], baseAPI, endpoint)
+		jsonBody, err := enc(body)
 		if err != nil {
-			fmt.Println(err)
+			return err
 		}
-		fmt.Println("-------------------------------")
-		fmt.Println(string(requestDump))
-		fmt.Println("")
-	}
-
-	resp, err := api.HttpClient.Do(req.WithContext(ctx))
-	if err != nil {
-		return fmt.Errorf("%s: %w", req.URL.String(), err)
-	}
-	defer resp.Body.Close()
-
-	var cnt bytes.Buffer
-	_, err = io.Copy(&cnt, resp.Body)
-	if err != nil {
-		return fmt.Errorf("Copy: %w", err)
-	}
-
-	if resp.StatusCode == 404 {
-		var apiErr APIError
-		if err := json.Unmarshal(cnt.Bytes(), &apiErr); err != nil {
-			return ErrNotFound
-		}
-		return apiErr
-	}
-
-	if resp.StatusCode > 299 {
-		var apiErr APIError
-		if err := json.Unmarshal(cnt.Bytes(), &apiErr); err != nil {
-			return fmt.Errorf("%s: status code=%d, body=%s", req.URL.String(), resp.StatusCode, cnt.String())
-		}
-
-		// Handle cases where some API calls (/v1/chain/get_account for example) returns a 500
-		// error when retrieving data that does not exist.
-		if apiErr.IsUnknownKeyError() {
-			return ErrNotFound
-		}
-
-		return apiErr
-	}
-
-	if api.Debug {
-		fmt.Println("RESPONSE:")
-		responseDump, err := httputil.DumpResponse(resp, true)
+		req, err := http.NewRequest("POST", targetURL, jsonBody)
 		if err != nil {
-			fmt.Println(err)
+			return fmt.Errorf("NewRequest: %w", err)
 		}
-		fmt.Println("-------------------------------")
-		fmt.Println(cnt.String())
-		fmt.Println("-------------------------------")
-		fmt.Printf("%q\n", responseDump)
-		fmt.Println("")
-	}
 
-	if err := json.Unmarshal(cnt.Bytes(), &out); err != nil {
-		return fmt.Errorf("Unmarshal: %w", err)
-	}
+		for k, v := range api.Header {
+			if req.Header == nil {
+				req.Header = http.Header{}
+			}
+			req.Header[k] = append(req.Header[k], v...)
+		}
 
-	return nil
+		if api.Debug {
+			requestDump, err := httputil.DumpRequest(req, true)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println("-------------------------------")
+			fmt.Println(string(requestDump))
+			fmt.Println("")
+		}
+
+		resp, err := api.HttpClient.Do(req.WithContext(ctx))
+		if err != nil {
+			// fmt.Println("in do error", err)
+			lastErr = fmt.Errorf("%s: %w", targetURL, err)
+			continue
+		}
+
+		if api.Debug {
+			responseDump, err := httputil.DumpResponse(resp, true)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println("-------------------------------")
+			fmt.Println(string(responseDump))
+			fmt.Println("")
+		}
+
+		defer resp.Body.Close()
+
+		var cnt bytes.Buffer
+		_, err = io.Copy(&cnt, resp.Body)
+		if err != nil {
+			lastErr = fmt.Errorf("copy: %w", err)
+			continue
+		}
+		if resp.StatusCode > 299 {
+			var apiErr APIError
+			if err := json.Unmarshal(cnt.Bytes(), &apiErr); err != nil {
+				lastErr = fmt.Errorf("status code=%d, body=%s", resp.StatusCode, cnt.String())
+				continue
+			}
+
+			return apiErr
+		}
+		// Application-level errors: 4xx except 429
+		// if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != 429 {
+		// 	var apiErr APIError
+		// 	if err := json.Unmarshal(cnt.Bytes(), &apiErr); err != nil {
+		// 		if resp.StatusCode == 404 {
+		// 			return ErrNotFound
+		// 		}
+		// 		return fmt.Errorf("status code=%d, body=%s", resp.StatusCode, cnt.String())
+		// 	}
+		// 	return apiErr
+		// }
+
+		// if resp.StatusCode > 299 {
+		// 	var apiErr APIError
+		// 	if err := json.Unmarshal(cnt.Bytes(), &apiErr); err != nil {
+		// 		lastErr = fmt.Errorf("%s: status code=%d, body=%s", targetURL, resp.StatusCode, cnt.String())
+		// 		continue
+		// 	}
+		// 	// Handle cases where some API calls (/v1/chain/get_account for example) returns a 500
+		// 	// error when retrieving data that does not exist.
+		// 	if apiErr.IsUnknownKeyError() {
+		// 		return ErrNotFound
+		// 	}
+		// 	if apiErr.IsContractError() {
+		// 		// fmt.Println("Is contract error: ", apiErr)
+		// 		return apiErr
+		// 	}
+		// 	lastErr = apiErr
+		// 	continue
+		// }
+
+		// if api.Debug {
+		// 	fmt.Println("RESPONSE:")
+		// 	responseDump, err := httputil.DumpResponse(resp, true)
+		// 	if err != nil {
+		// 		fmt.Println(err)
+		// 	}
+		// 	fmt.Println("-------------------------------")
+		// 	fmt.Println(cnt.String())
+		// 	fmt.Println("-------------------------------")
+		// 	fmt.Printf("%q\n", responseDump)
+		// 	fmt.Println("")
+		// }
+
+		if err := json.Unmarshal(cnt.Bytes(), &out); err != nil {
+			lastErr = fmt.Errorf("unmarshal: %w", err)
+			continue
+		}
+
+		// Success
+		return nil
+	}
+	// All endpoints failed
+	return lastErr
 }
 
 var ErrNotFound = errors.New("resource not found")
