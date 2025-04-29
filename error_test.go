@@ -2,64 +2,136 @@ package eos
 
 import (
 	"encoding/json"
-	"reflect"
 	"testing"
 )
 
 func TestAPIErrorUnmarshal(t *testing.T) {
-	jsonData := `{
-		"code": 500,
-		"message": "Internal Server Error",
-		"error": {
-			"code": 123456,
-			"name": "some_error_name",
-			"what": "Something went wrong",
-			"details": [
-				{
-					"message": "Detail message 1",
-					"file": "file1.go",
-					"line_number": 10,
-					"method": "MethodA"
-				},
-				{
-					"message": "Detail message 2",
-					"file": "file2.go",
-					"line_number": 20,
-					"method": "MethodB"
+	tests := []struct {
+		name     string
+		jsonData string
+		expected APIError
+	}{
+		{
+			name: "full error with two details",
+			jsonData: `{
+				"code": 500,
+				"message": "Internal Server Error",
+				"error": {
+					"code": 123456,
+					"name": "some_error_name",
+					"what": "Something went wrong",
+					"details": [
+						{
+							"message": "Detail message 1",
+							"file": "file1.go",
+							"line_number": 10,
+							"method": "MethodA"
+						},
+						{
+							"message": "Detail message 2",
+							"file": "file2.go",
+							"line_number": 20,
+							"method": "MethodB"
+						}
+					]
 				}
-			]
-		}
-	}`
-
-	var apiErr APIError
-	err := json.Unmarshal([]byte(jsonData), &apiErr)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal: %v", err)
+			}`,
+			expected: APIError{
+				Code:    500,
+				Message: "Internal Server Error",
+				ErrorStruct: apiErrorStruct{
+					Code: 123456,
+					Name: "some_error_name",
+					What: "Something went wrong",
+					Details: []APIErrorDetail{
+						{Message: "Detail message 1", File: "file1.go", LineNumber: 10, Method: "MethodA"},
+						{Message: "Detail message 2", File: "file2.go", LineNumber: 20, Method: "MethodB"},
+					},
+				},
+			},
+		},
+		{
+			name: "unknown key error",
+			jsonData: `{
+				"code": 400,
+				"message": "Account lookup",
+				"error": {
+					"code": 3060002,
+					"name": "account_query_exception",
+					"what": "Account Query Exception",
+					"details": [
+						{
+							"message": "unable to retrieve account info (unknown key (boost::tuples::tuple<bool, eosio::chain::name, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type>): (0 nonexistant))",
+							"file": "chain_plugin.cpp",
+							"line_number": 2594,
+							"method": "get_account"
+						}
+					]
+				}
+			}`,
+			expected: APIError{
+				Code:    400,
+				Message: "Account lookup",
+				ErrorStruct: apiErrorStruct{
+					Code: 3060002,
+					Name: "account_query_exception",
+					What: "Account Query Exception",
+					Details: []APIErrorDetail{
+						{Message: "unable to retrieve account info (unknown key (boost::tuples::tuple<bool, eosio::chain::name, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type, boost::tuples::null_type>): (0 nonexistant))", File: "chain_plugin.cpp", LineNumber: 2594, Method: "get_account"},
+					},
+				},
+			},
+		},
+		{
+			name: "unknown key error",
+			jsonData: `{
+				"code": 500,
+				"message": "Internal Service Error",
+				"error": {
+					"code": 3080004,
+					"name": "tx_cpu_usage_exceeded",
+					"what": "Transaction exceeded the current CPU usage limit imposed on the transaction",
+					"details": [
+						{
+							"message": "transaction 60f0fab2544e0cb946e673caf95e1d7056fd8bbae89903db6167346571bcb404 was executing for too long 150101us reached on chain max_transaction_cpu_usage 150000us",
+							"file": "transaction_context.cpp",
+							"line_number": 482,
+							"method": "checktime"
+						},
+						{
+							"message": "testcontract <= testcontract::toolong pending console output: ",
+							"file": "apply_context.cpp",
+							"line_number": 134,
+							"method": "exec_one"
+						}
+					]
+				}
+			}`,
+			expected: APIError{
+				Code:    500,
+				Message: "Internal Service Error",
+				ErrorStruct: apiErrorStruct{
+					Code: 3080004,
+					Name: "tx_cpu_usage_exceeded",
+					What: "Transaction exceeded the current CPU usage limit imposed on the transaction",
+					Details: []APIErrorDetail{
+						{Message: "transaction 60f0fab2544e0cb946e673caf95e1d7056fd8bbae89903db6167346571bcb404 was executing for too long 150101us reached on chain max_transaction_cpu_usage 150000us", File: "transaction_context.cpp", LineNumber: 482, Method: "checktime"},
+						{Message: "testcontract <= testcontract::toolong pending console output: ", File: "apply_context.cpp", LineNumber: 134, Method: "exec_one"},
+					},
+				},
+			},
+		},
 	}
 
-	if apiErr.Code != 500 {
-		t.Errorf("Expected code 500, got %d", apiErr.Code)
-	}
-	if apiErr.Message != "Internal Server Error" {
-		t.Errorf("Expected message 'Internal Server Error', got '%s'", apiErr.Message)
-	}
-	if apiErr.ErrorStruct.Code != 123456 {
-		t.Errorf("Expected error.code 123456, got %d", apiErr.ErrorStruct.Code)
-	}
-	if apiErr.ErrorStruct.Name != "some_error_name" {
-		t.Errorf("Expected error.name 'some_error_name', got '%s'", apiErr.ErrorStruct.Name)
-	}
-	if apiErr.ErrorStruct.What != "Something went wrong" {
-		t.Errorf("Expected error.what 'Something went wrong', got '%s'", apiErr.ErrorStruct.What)
-	}
-
-	expectedDetails := []APIErrorDetail{
-		{Message: "Detail message 1", File: "file1.go", LineNumber: 10, Method: "MethodA"},
-		{Message: "Detail message 2", File: "file2.go", LineNumber: 20, Method: "MethodB"},
-	}
-
-	if !reflect.DeepEqual(apiErr.ErrorStruct.Details, expectedDetails) {
-		t.Errorf("Expected error.details %+v, got %+v", expectedDetails, apiErr.ErrorStruct.Details)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var actual APIError
+			err := json.Unmarshal([]byte(tt.jsonData), &actual)
+			if err != nil {
+				t.Fatalf("Failed to unmarshal: %v", err)
+			}
+			compareAPIError(t, actual, tt.expected)
+		})
 	}
 }
 
