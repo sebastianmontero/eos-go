@@ -9,7 +9,10 @@ import (
 )
 
 func ExampleAPI_GetAccount() {
-	api := eos.New(getAPIURL())
+	api, err := eos.New(getAPIURL())
+	if err != nil {
+		panic(fmt.Errorf("new api: %w", err))
+	}
 
 	account := eos.AccountName("eos.rex")
 	info, err := api.GetAccount(context.Background(), account)

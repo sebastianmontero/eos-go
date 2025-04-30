@@ -30,6 +30,7 @@ type API struct {
 	DefaultMaxCPUUsageMS    uint8
 	DefaultMaxNetUsageWords uint32 // in 8-bytes words
 
+	ChainID          Checksum256
 	lastGetInfo      *InfoResp
 	lastGetInfoStamp time.Time
 	lastGetInfoLock  sync.Mutex
@@ -40,12 +41,15 @@ type API struct {
 	nonce                     uint64
 }
 
-func New(baseURL string) *API {
+func New(baseURL string) (*API, error) {
 	return NewFromUrls([]string{baseURL})
 }
 
 // NewFromUrls creates an API instance with multiple endpoints
-func NewFromUrls(baseURLs []string) *API {
+func NewFromUrls(baseURLs []string) (*API, error) {
+	if len(baseURLs) == 0 {
+		return nil, fmt.Errorf("at least one endpoint must be provided")
+	}
 	trimmed := make([]string, len(baseURLs))
 	for i, u := range baseURLs {
 		trimmed[i] = strings.TrimRight(u, "/")
@@ -70,7 +74,30 @@ func NewFromUrls(baseURLs []string) *API {
 		Compress: CompressionZlib,
 		Header:   make(http.Header),
 	}
-	return api
+	chainID, err := api.verifyEndpoints()
+	if err != nil {
+		return nil, err
+	}
+	api.ChainID = chainID
+	return api, nil
+}
+
+func (api *API) verifyEndpoints() (Checksum256, error) {
+	var chainID Checksum256
+
+	for _, endpoint := range api.BaseURLs {
+		info, err := api.GetInfoForEndpoint(context.Background(), endpoint)
+		if err != nil {
+			return chainID, err
+		}
+		if len(chainID) == 0 {
+			chainID = info.ChainID
+		} else if !bytes.Equal(chainID, info.ChainID) {
+			return chainID, fmt.Errorf("all endpoints must be of the same chain ID")
+		}
+	}
+
+	return chainID, nil
 }
 
 // FixKeepAlives tests the remote server for keepalive support (the
@@ -510,6 +537,11 @@ func (api *API) GetInfo(ctx context.Context) (out *InfoResp, err error) {
 	return
 }
 
+func (api *API) GetInfoForEndpoint(ctx context.Context, endpoint string) (out *InfoResp, err error) {
+	err = api.call(ctx, []string{endpoint}, "chain", "get_info", nil, &out)
+	return
+}
+
 func (api *API) cachedGetInfo(ctx context.Context) (*InfoResp, error) {
 	api.lastGetInfoLock.Lock()
 	defer api.lastGetInfoLock.Unlock()
@@ -682,7 +714,11 @@ func (api *API) GetCurrencyStats(ctx context.Context, code AccountName, symbol s
 
 func (api *API) Call(ctx context.Context, baseAPI string, endpoint string, body interface{}, out interface{}) error {
 	// fmt.Println("In call")
-	endpoints := api.BaseURLs
+	return api.call(ctx, api.BaseURLs, baseAPI, endpoint, body, out)
+}
+
+func (api *API) call(ctx context.Context, endpoints []string, baseAPI string, endpoint string, body interface{}, out interface{}) error {
+	// fmt.Println("In call")
 	if len(endpoints) == 0 {
 		return errors.New("no API endpoints configured")
 	}
@@ -725,7 +761,9 @@ func (api *API) Call(ctx context.Context, baseAPI string, endpoint string, body 
 
 		resp, err := api.HttpClient.Do(req.WithContext(ctx))
 		if err != nil {
-			// fmt.Println("in do error", err)
+			if api.Debug {
+				fmt.Println("error in http request:", err)
+			}
 			lastErr = fmt.Errorf("%s: %w", targetURL, err)
 			continue
 		}
@@ -832,4 +870,13 @@ func enc(v interface{}) (io.Reader, error) {
 	}
 
 	return buffer, nil
+}
+
+type TestAPIWrapper struct {
+	API
+}
+
+// VerifyEndpoints is a public wrapper around the private verifyEndpoints method
+func (t *TestAPIWrapper) VerifyEndpoints() (Checksum256, error) {
+	return t.verifyEndpoints()
 }

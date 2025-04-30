@@ -9,11 +9,14 @@ import (
 )
 
 func ExampleAPI_GetProducers() {
-	api := eos.New(getAPIURL())
+	api, err := eos.New(getAPIURL())
+	if err != nil {
+		panic(fmt.Errorf("new api: %w", err))
+	}
 
 	resp, err := api.GetProducers(context.Background())
 	if err != nil {
-		panic(fmt.Errorf("get account: %w", err))
+		panic(fmt.Errorf("get producers: %w", err))
 	}
 
 	sort.Slice(resp.Producers, func(i, j int) bool {

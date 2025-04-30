@@ -9,7 +9,10 @@ import (
 )
 
 func ExampleAPI_GetInfo() {
-	api := eos.New(getAPIURL())
+	api, err := eos.New(getAPIURL())
+	if err != nil {
+		panic(fmt.Errorf("new api: %w", err))
+	}
 
 	info, err := api.GetInfo(context.Background())
 	if err != nil {

@@ -12,10 +12,13 @@ import (
 )
 
 func ExampleAPI_PushTransaction_transfer_EOS() {
-	api := eos.New(getAPIURL())
+	api, err := eos.New(getAPIURL())
+	if err != nil {
+		panic(fmt.Errorf("new api: %w", err))
+	}
 
 	keyBag := &eos.KeyBag{}
-	err := keyBag.ImportPrivateKey(context.Background(), readPrivateKey())
+	err = keyBag.ImportPrivateKey(context.Background(), readPrivateKey())
 	if err != nil {
 		panic(fmt.Errorf("import private key: %w", err))
 	}
