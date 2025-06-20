@@ -382,6 +382,10 @@ func (s Symbol) String() string {
 	return fmt.Sprintf("%d,%s", s.Precision, s.Symbol)
 }
 
+func (s Symbol) MarshalJSON() (data []byte, err error) {
+	return json.Marshal(s.String())
+}
+
 type SymbolCode uint64
 
 func NameToSymbolCode(name Name) (SymbolCode, error) {
