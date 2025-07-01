@@ -41,12 +41,22 @@ type API struct {
 	nonce                     uint64
 }
 
+type APIOpts struct {
+	Strict bool
+}
+
 func New(baseURL string) (*API, error) {
 	return NewFromUrls([]string{baseURL})
 }
 
 // NewFromUrls creates an API instance with multiple endpoints
 func NewFromUrls(baseURLs []string) (*API, error) {
+	return NewFromUrlsWithOpts(baseURLs, &APIOpts{
+		Strict: true,
+	})
+}
+
+func NewFromUrlsWithOpts(baseURLs []string, opts *APIOpts) (*API, error) {
 	if len(baseURLs) == 0 {
 		return nil, fmt.Errorf("at least one endpoint must be provided")
 	}
@@ -74,7 +84,7 @@ func NewFromUrls(baseURLs []string) (*API, error) {
 		Compress: CompressionZlib,
 		Header:   make(http.Header),
 	}
-	chainID, err := api.verifyEndpoints()
+	chainID, err := api.verifyEndpoints(opts.Strict)
 	if err != nil {
 		return nil, err
 	}
@@ -82,19 +92,34 @@ func NewFromUrls(baseURLs []string) (*API, error) {
 	return api, nil
 }
 
-func (api *API) verifyEndpoints() (Checksum256, error) {
+func (api *API) verifyEndpoints(strict bool) (Checksum256, error) {
 	var chainID Checksum256
+	var hasValidEndpoint bool
+	var lastErr error
 
 	for _, endpoint := range api.BaseURLs {
 		info, err := api.GetInfoForEndpoint(context.Background(), endpoint)
 		if err != nil {
-			return chainID, err
+			lastErr = fmt.Errorf("endpoint %s: %w", endpoint, err)
+			if strict {
+				return chainID, lastErr
+			}
+			continue
 		}
-		if len(chainID) == 0 {
+
+		if !hasValidEndpoint {
 			chainID = info.ChainID
+			hasValidEndpoint = true
 		} else if !bytes.Equal(chainID, info.ChainID) {
 			return chainID, fmt.Errorf("all endpoints must be of the same chain ID")
 		}
+	}
+
+	if !hasValidEndpoint {
+		if lastErr != nil {
+			return chainID, fmt.Errorf("no valid endpoints could be reached, last error: %w", lastErr)
+		}
+		return chainID, fmt.Errorf("no valid endpoints could be reached")
 	}
 
 	return chainID, nil
@@ -877,6 +902,7 @@ type TestAPIWrapper struct {
 }
 
 // VerifyEndpoints is a public wrapper around the private verifyEndpoints method
-func (t *TestAPIWrapper) VerifyEndpoints() (Checksum256, error) {
-	return t.verifyEndpoints()
+// strict parameter determines if all endpoints must be reachable (true) or if at least one is sufficient (false)
+func (t *TestAPIWrapper) VerifyEndpoints(strict bool) (Checksum256, error) {
+	return t.verifyEndpoints(strict)
 }

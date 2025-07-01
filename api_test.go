@@ -51,46 +51,186 @@ func getInfoMockRoundTripper(chainIDs []string) *mockRoundTripper {
 	}
 }
 
-func TestAPIVerifyEndpoints_Success(t *testing.T) {
+func TestAPIVerifyEndpoints_AllEndpointsValid(t *testing.T) {
 	endpoints := []string{"http://endpoint1", "http://endpoint2", "http://endpoint3"}
-	// Simulate endpoint1 and endpoint2 failing, endpoint3 succeeds
-
-	mockClient := &http.Client{
-		Transport: getInfoMockRoundTripper([]string{"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906"}),
-		Timeout:   2 * time.Second,
-	}
+	
 	api := &eos.TestAPIWrapper{
 		API: eos.API{
-			HttpClient: mockClient,
-			BaseURLs:   endpoints,
+			HttpClient: &http.Client{
+				Transport: getInfoMockRoundTripper([]string{
+					"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+					"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+					"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+				}),
+				Timeout: 2 * time.Second,
+			},
+			BaseURLs: endpoints,
 		},
 	}
 
-	chainID, err := api.VerifyEndpoints()
-	require.NoError(t, err, "VerifyEndpoints should succeed")
-	require.Equal(t, "aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906", chainID.String())
+	t.Run("strict mode", func(t *testing.T) {
+		chainID, err := api.VerifyEndpoints(true)
+		require.NoError(t, err, "VerifyEndpoints should succeed with all endpoints valid in strict mode")
+		require.Equal(t, "aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906", chainID.String())
+	})
 
+	t.Run("non-strict mode", func(t *testing.T) {
+		chainID, err := api.VerifyEndpoints(false)
+		require.NoError(t, err, "VerifyEndpoints should succeed with all endpoints valid in non-strict mode")
+		require.Equal(t, "aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906", chainID.String())
+	})
 }
 
-func TestAPIVerifyEndpoints_Fail(t *testing.T) {
+func TestAPIVerifyEndpoints_SomeEndpointsFail(t *testing.T) {
 	endpoints := []string{"http://endpoint1", "http://endpoint2", "http://endpoint3"}
-	// Simulate endpoint1 and endpoint2 failing, endpoint3 succeeds
+	
+	t.Run("strict mode - should fail", func(t *testing.T) {
+		mockTransport := getInfoMockRoundTripper([]string{
+			"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+			"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+		})
+		mockTransport.failURLs = map[string]bool{
+			"http://endpoint3/v1/chain/get_info": true,
+		}
 
-	mockClient := &http.Client{
-		Transport: getInfoMockRoundTripper([]string{"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906", "8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f"}),
-		Timeout:   2 * time.Second,
-	}
-	api := &eos.TestAPIWrapper{
-		API: eos.API{
-			HttpClient: mockClient,
-			BaseURLs:   endpoints,
-		},
-	}
+		api := &eos.TestAPIWrapper{
+			API: eos.API{
+				HttpClient: &http.Client{
+					Transport: mockTransport,
+					Timeout:   2 * time.Second,
+				},
+				BaseURLs: endpoints,
+			},
+		}
 
-	_, err := api.VerifyEndpoints()
-	require.Error(t, err, "VerifyEndpoints should fail")
-	require.Equal(t, "all endpoints must be of the same chain ID", err.Error())
+		_, err := api.VerifyEndpoints(true)
+		require.Error(t, err, "VerifyEndpoints should fail in strict mode when some endpoints fail")
+		require.Contains(t, err.Error(), "http://endpoint3/v1/chain/get_info: Post \"http://endpoint3/v1/chain/get_info\": simulated endpoint failure")
+	})
 
+	t.Run("non-strict mode - should succeed", func(t *testing.T) {
+		mockTransport := getInfoMockRoundTripper([]string{
+			"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+			"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+		})
+		mockTransport.failURLs = map[string]bool{
+			"http://endpoint3/v1/chain/get_info": true,
+		}
+
+		api := &eos.TestAPIWrapper{
+			API: eos.API{
+				HttpClient: &http.Client{
+					Transport: mockTransport,
+					Timeout:   2 * time.Second,
+				},
+				BaseURLs: endpoints,
+			},
+		}
+
+		chainID, err := api.VerifyEndpoints(false)
+		require.NoError(t, err, "VerifyEndpoints should succeed in non-strict mode with some endpoints failing")
+		require.Equal(t, "aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906", chainID.String())
+	})
+}
+
+func TestAPIVerifyEndpoints_AllEndpointsFail(t *testing.T) {
+	endpoints := []string{"http://endpoint1", "http://endpoint2", "http://endpoint3"}
+	
+	t.Run("strict mode - should fail", func(t *testing.T) {
+		mockTransport := &mockRoundTripper{
+			failURLs: map[string]bool{
+				"http://endpoint1/v1/chain/get_info": true,
+			},
+			responseBody: [][]byte{},
+			statusCode:   200,
+		}
+
+		api := &eos.TestAPIWrapper{
+			API: eos.API{
+				HttpClient: &http.Client{
+					Transport: mockTransport,
+					Timeout:   2 * time.Second,
+				},
+				BaseURLs: endpoints,
+			},
+		}
+
+		_, err := api.VerifyEndpoints(true)
+		require.Error(t, err, "VerifyEndpoints should fail in strict mode when first endpoint fails")
+		require.Contains(t, err.Error(), "http://endpoint1/v1/chain/get_info: Post \"http://endpoint1/v1/chain/get_info\": simulated endpoint failure")
+	})
+
+	t.Run("non-strict mode - should fail with last error", func(t *testing.T) {
+		mockTransport := &mockRoundTripper{
+			failURLs: map[string]bool{
+				"http://endpoint1/v1/chain/get_info": true,
+				"http://endpoint2/v1/chain/get_info": true,
+				"http://endpoint3/v1/chain/get_info": true,
+			},
+			responseBody: [][]byte{},
+			statusCode:   200,
+		}
+
+		api := &eos.TestAPIWrapper{
+			API: eos.API{
+				HttpClient: &http.Client{
+					Transport: mockTransport,
+					Timeout:   2 * time.Second,
+				},
+				BaseURLs: endpoints,
+			},
+		}
+
+		_, err := api.VerifyEndpoints(false)
+		require.Error(t, err, "VerifyEndpoints should fail when all endpoints fail")
+		require.Contains(t, err.Error(), "no valid endpoints could be reached, last error: endpoint http://endpoint3: http://endpoint3/v1/chain/get_info: Post \"http://endpoint3/v1/chain/get_info\": simulated endpoint failure")
+	})
+}
+
+func TestAPIVerifyEndpoints_ChainIDMismatch(t *testing.T) {
+	endpoints := []string{"http://endpoint1", "http://endpoint2"}
+	
+	t.Run("strict mode - should fail on first mismatch", func(t *testing.T) {
+		mockTransport := getInfoMockRoundTripper([]string{
+			"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+			"8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f", // Different chain ID
+		})
+
+		api := &eos.TestAPIWrapper{
+			API: eos.API{
+				HttpClient: &http.Client{
+					Transport: mockTransport,
+					Timeout:   2 * time.Second,
+				},
+				BaseURLs: endpoints,
+			},
+		}
+
+		_, err := api.VerifyEndpoints(true)
+		require.Error(t, err, "VerifyEndpoints should fail in strict mode when chain IDs don't match")
+		require.Equal(t, "all endpoints must be of the same chain ID", err.Error())
+	})
+
+	t.Run("non-strict mode - should fail on first mismatch", func(t *testing.T) {
+		mockTransport := getInfoMockRoundTripper([]string{
+			"aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",
+			"8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f", // Different chain ID
+		})
+
+		api := &eos.TestAPIWrapper{
+			API: eos.API{
+				HttpClient: &http.Client{
+					Transport: mockTransport,
+					Timeout:   2 * time.Second,
+				},
+				BaseURLs: endpoints,
+			},
+		}
+
+		_, err := api.VerifyEndpoints(false)
+		require.Error(t, err, "VerifyEndpoints should fail in non-strict mode when chain IDs don't match")
+		require.Equal(t, "all endpoints must be of the same chain ID", err.Error())
+	})
 }
 
 func TestAPICall_Failover(t *testing.T) {
