@@ -562,6 +562,14 @@ func (api *API) GetInfo(ctx context.Context) (out *InfoResp, err error) {
 	return
 }
 
+func (api *API) GetHeadTime(ctx context.Context) (time.Time, error) {
+	info, err := api.GetInfo(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return info.HeadBlockTime.Time, nil
+}
+
 func (api *API) GetInfoForEndpoint(ctx context.Context, endpoint string) (out *InfoResp, err error) {
 	err = api.call(ctx, []string{endpoint}, "chain", "get_info", nil, &out)
 	return
